@@ -12,7 +12,7 @@ interface Photo {
 interface WaterfallColumnProps {
   photos: Photo[];
   columnIndex: number;
-  speed: number; // pixels per second
+  speed: number;
   hoveredPhotoId: string | null;
   onPhotoHover: (photoId: string | null, columnIndex: number, title: string | null, position: { x: number; y: number } | null) => void;
   onPhotoMove: (position: { x: number; y: number }) => void;
@@ -31,30 +31,38 @@ export function WaterfallColumn({
   const positionRef = useRef(0);
   const lastTimeRef = useRef<number | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [contentHeight, setContentHeight] = useState(0);
 
-  // Check if this column has a hovered photo
   const isPaused = hoveredPhotoId !== null && photos.some(p => p.id === hoveredPhotoId);
 
-  // Double the photos for seamless loop
-  const displayPhotos = [...photos, ...photos];
+  // Use single set of photos initially to reduce load
+  const displayPhotos = photos.length > 0 ? [...photos, ...photos] : [];
 
-  // Calculate total height of one set of photos
-  const getContentHeight = useCallback(() => {
-    if (!containerRef.current) return 0;
-    const firstSet = containerRef.current.querySelectorAll('.photo-item');
-    let height = 0;
-    firstSet.forEach((item, index) => {
-      if (index < photos.length) {
-        height += (item as HTMLElement).offsetHeight;
-      }
-    });
-    return height;
+  // Calculate content height once photos are rendered
+  useEffect(() => {
+    if (!containerRef.current || photos.length === 0) return;
+    
+    const calculateHeight = () => {
+      const items = containerRef.current?.querySelectorAll('.photo-item');
+      if (!items) return;
+      
+      let height = 0;
+      items.forEach((item, index) => {
+        if (index < photos.length) {
+          height += (item as HTMLElement).offsetHeight;
+        }
+      });
+      setContentHeight(height);
+    };
+
+    // Wait for images to load
+    const timer = setTimeout(calculateHeight, 500);
+    return () => clearTimeout(timer);
   }, [photos.length]);
 
-  // Animation loop using requestAnimationFrame for smooth 60fps
   const animate = useCallback(
     (timestamp: number) => {
-      if (isPaused) {
+      if (isPaused || contentHeight === 0) {
         lastTimeRef.current = null;
         return;
       }
@@ -66,29 +74,24 @@ export function WaterfallColumn({
       const deltaTime = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
 
-      // Calculate movement based on speed (pixels per second)
       const movement = (speed * deltaTime) / 1000;
       positionRef.current += movement;
 
-      const contentHeight = getContentHeight();
-
-      // Reset position for seamless loop
-      if (contentHeight > 0 && positionRef.current >= contentHeight) {
+      if (positionRef.current >= contentHeight) {
         positionRef.current = positionRef.current % contentHeight;
       }
 
       if (containerRef.current) {
-        containerRef.current.style.transform = `translateY(-${positionRef.current}px)`;
+        containerRef.current.style.transform = `translate3d(0, -${positionRef.current}px, 0)`;
       }
 
       animationRef.current = requestAnimationFrame(animate);
     },
-    [isPaused, speed, getContentHeight]
+    [isPaused, speed, contentHeight]
   );
 
-  // Start/stop animation
   useEffect(() => {
-    if (!isPaused && isReady) {
+    if (!isPaused && isReady && contentHeight > 0) {
       animationRef.current = requestAnimationFrame(animate);
     }
 
@@ -98,9 +101,8 @@ export function WaterfallColumn({
         animationRef.current = null;
       }
     };
-  }, [isPaused, isReady, animate]);
+  }, [isPaused, isReady, animate, contentHeight]);
 
-  // Handle visibility change (pause when tab is hidden)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -109,7 +111,7 @@ export function WaterfallColumn({
           animationRef.current = null;
         }
         lastTimeRef.current = null;
-      } else if (!isPaused && isReady) {
+      } else if (!isPaused && isReady && contentHeight > 0) {
         animationRef.current = requestAnimationFrame(animate);
       }
     };
@@ -118,9 +120,8 @@ export function WaterfallColumn({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isPaused, isReady, animate]);
+  }, [isPaused, isReady, animate, contentHeight]);
 
-  // Set ready state after initial render
   useEffect(() => {
     const timer = setTimeout(() => setIsReady(true), 100);
     return () => clearTimeout(timer);
@@ -146,19 +147,21 @@ export function WaterfallColumn({
     [onPhotoMove]
   );
 
+  if (photos.length === 0) {
+    return <div className="h-full" />;
+  }
+
   return (
     <div className="relative h-full overflow-hidden">
-      {/* Gradient overlays for smooth fade effect */}
       <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-zinc-950 to-transparent z-10 pointer-events-none" />
       <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-zinc-950 to-transparent z-10 pointer-events-none" />
 
-      {/* Scrolling container */}
       <div
         ref={containerRef}
         className="flex flex-col gap-3"
         style={{
           willChange: 'transform',
-          backfaceVisibility: 'hidden',
+          transform: 'translate3d(0, 0, 0)',
         }}
       >
         {displayPhotos.map((photo, index) => (

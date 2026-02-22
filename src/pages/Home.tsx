@@ -128,9 +128,9 @@ export function Home() {
           <div className="flex-1 max-w-md mx-8">
             <div className="relative group">
               {isLoading ? (
-                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 animate-spin" />
+                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60 animate-spin z-10" />
               ) : (
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 group-focus-within:text-white/70 transition-colors" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60 group-hover:text-white/80 group-focus-within:text-white transition-colors z-10 pointer-events-none" />
               )}
               <input
                 type="text"
